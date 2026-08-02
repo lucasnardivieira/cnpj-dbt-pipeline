@@ -1,0 +1,26 @@
+# dados brutos (NUNCA commitar - são GBs)
+data/raw/
+*.csv
+*.zip
+*.duckdb
+*.duckdb.wal
+
+# python
+.venv/
+__pycache__/
+*.pyc
+
+# dbt
+target/
+dbt_packages/
+logs/
+
+# prefect
+.prefect/
+
+# env
+.env
+profiles.yml
+
+# md
+plano_execucao_desafio_franq.md
