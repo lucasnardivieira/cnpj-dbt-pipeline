@@ -1,0 +1,12 @@
+name: 'franq_desafio'
+version: '1.0.0'
+profile: 'franq_desafio'
+
+models:
+  franq_desafio:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: view
+    marts:
+      +materialized: table
