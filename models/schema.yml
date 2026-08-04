@@ -17,14 +17,13 @@ models:
     columns:
       - name: cnpj_basico
         tests:
-          # severity=warn: as amostras de socios/empresas sao as primeiras 10k linhas
-          # de arquivos brutos DIFERENTES e independentes, sem garantia de overlap de
-          # cnpj_basico. Em producao (dado completo) este teste deve ser 'error'.
+          # A amostra e gerada por flows/extract.py a partir da INTERSECCAO de
+          # cnpj_basico entre empresas e estabelecimentos (ver selecionar_amostra_cnpjs),
+          # garantindo overlap real entre os arquivos. socios/simples sao filtrados pelo
+          # mesmo conjunto de cnpj_basico, entao o relationship abaixo roda como 'error'.
           - relationships:
               to: ref('stg_empresas')
               field: cnpj_basico
-              config:
-                severity: warn
 
   - name: fct_empresas
     columns:

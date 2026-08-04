@@ -8,7 +8,7 @@ sources:
       - name: empresas
         description: Dados cadastrais das empresas.
         meta:
-          external_location: "data/sample/empresas.csv"
+          external_location: "read_csv('data/sample/empresas.csv', all_varchar=1)"
         columns:
           - name: cnpj_basico
             description: Número base de inscrição no CNPJ.
@@ -28,7 +28,7 @@ sources:
       - name: estabelecimentos
         description: Dados cadastrais dos estabelecimentos.
         meta:
-          external_location: "data/sample/estabelecimentos.csv"
+          external_location: "read_csv('data/sample/estabelecimentos.csv', all_varchar=1)"
         columns:
           - name: cnpj_basico
             description: Número base de inscrição no CNPJ.
@@ -94,7 +94,7 @@ sources:
       - name: socios
         description: Dados dos sócios das empresas.
         meta:
-          external_location: "data/sample/socios.csv"
+          external_location: "read_csv('data/sample/socios.csv', all_varchar=1)"
         columns:
           - name: cnpj_basico
             description: Número base de inscrição no CNPJ.
@@ -122,7 +122,7 @@ sources:
       - name: simples
         description: Informações do Simples Nacional.
         meta:
-          external_location: "data/sample/simples.csv"
+          external_location: "read_csv('data/sample/simples.csv', all_varchar=1)"
         columns:
           - name: cnpj_basico
             description: Número base de inscrição no CNPJ.
@@ -142,7 +142,7 @@ sources:
       - name: cnae
         description: Domínio de atividades econômicas CNAE.
         meta:
-          external_location: "data/sample/cnae.csv"
+          external_location: "read_csv('data/sample/cnae.csv', all_varchar=1)"
         columns:
           - name: codigo
             description: Código da atividade econômica.
