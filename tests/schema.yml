@@ -1,0 +1,28 @@
+version: 2
+
+models:
+  - name: fct_empresas
+    columns:
+      - name: cnpj_basico
+        tests:
+          - not_null
+          - unique
+      - name: capital_social_limpo
+        tests:
+          - not_null
+      - name: status_empresa
+        tests:
+          - accepted_values:
+              values: ['ativa', 'inativa']
+
+  - name: dim_cnae
+    columns:
+      - name: codigo_cnae
+        tests:
+          - not_null
+
+  - name: stg_empresas
+    columns:
+      - name: cnpj_basico
+        tests:
+          - not_null
