@@ -1,0 +1,150 @@
+version: 2
+
+sources:
+  - name: raw_cnpj
+    description: Fontes brutas do desafio CNPJ, extraídas em amostra localmente.
+    schema: main
+    tables:
+      - name: empresas
+        description: Dados cadastrais das empresas.
+        meta:
+          external_location: "data/sample/empresas.csv"
+        columns:
+          - name: cnpj_basico
+            description: Número base de inscrição no CNPJ.
+          - name: razao_social_nome_empresarial
+            description: Razão social ou nome empresarial da pessoa jurídica.
+          - name: natureza_juridica
+            description: Código da natureza jurídica.
+          - name: qualificacao_responsavel
+            description: Qualificação da pessoa física responsável pela empresa.
+          - name: capital_social
+            description: Capital social da empresa.
+          - name: porte_empresa
+            description: Código do porte da empresa.
+          - name: ente_federativo_responsavel
+            description: Ente federativo responsável, quando aplicável.
+
+      - name: estabelecimentos
+        description: Dados cadastrais dos estabelecimentos.
+        meta:
+          external_location: "data/sample/estabelecimentos.csv"
+        columns:
+          - name: cnpj_basico
+            description: Número base de inscrição no CNPJ.
+          - name: cnpj_ordem
+            description: Número do estabelecimento de inscrição no CNPJ.
+          - name: cnpj_dv
+            description: Dígito verificador do número de inscrição no CNPJ.
+          - name: identificador_matriz_filial
+            description: Código do identificador matriz/filial.
+          - name: nome_fantasia
+            description: Nome fantasia do estabelecimento.
+          - name: situacao_cadastral
+            description: Código da situação cadastral do estabelecimento.
+          - name: data_situacao_cadastral
+            description: Data do evento da situação cadastral.
+          - name: motivo_situacao_cadastral
+            description: Código do motivo da situação cadastral.
+          - name: nome_cidade_exterior
+            description: Nome da cidade no exterior, quando aplicável.
+          - name: pais
+            description: Código do país.
+          - name: data_inicio_atividade
+            description: Data de início da atividade.
+          - name: cnae_fiscal_principal
+            description: Código da atividade econômica principal.
+          - name: cnae_fiscal_secundaria
+            description: Código das atividades econômicas secundárias.
+          - name: tipo_logradouro
+            description: Descrição do tipo de logradouro.
+          - name: logradouro
+            description: Nome do logradouro.
+          - name: numero
+            description: Número do endereço.
+          - name: complemento
+            description: Complemento do endereço.
+          - name: bairro
+            description: Bairro do endereço.
+          - name: cep
+            description: Código de endereçamento postal.
+          - name: uf
+            description: Sigla da unidade da federação.
+          - name: municipio
+            description: Código do município.
+          - name: ddd_1
+            description: DDD do telefone 1.
+          - name: telefone_1
+            description: Telefone 1.
+          - name: ddd_2
+            description: DDD do telefone 2.
+          - name: telefone_2
+            description: Telefone 2.
+          - name: ddd_fax
+            description: DDD do fax.
+          - name: fax
+            description: Número do fax.
+          - name: correio_eletronico
+            description: Endereço de e-mail do contribuinte.
+          - name: situacao_especial
+            description: Situação especial da empresa.
+          - name: data_situacao_especial
+            description: Data em que a empresa entrou em situação especial.
+
+      - name: socios
+        description: Dados dos sócios das empresas.
+        meta:
+          external_location: "data/sample/socios.csv"
+        columns:
+          - name: cnpj_basico
+            description: Número base de inscrição no CNPJ.
+          - name: identificador_socio
+            description: Código do identificador do sócio.
+          - name: nome_socio
+            description: Nome do sócio pessoa física ou razão social pessoa jurídica.
+          - name: cnpj_cpf_socio
+            description: CPF ou CNPJ do sócio.
+          - name: qualificacao_socio
+            description: Código da qualificação do sócio.
+          - name: data_entrada_sociedade
+            description: Data de entrada na sociedade.
+          - name: pais
+            description: Código do país do sócio estrangeiro.
+          - name: representante_legal
+            description: CPF do representante legal.
+          - name: nome_representante
+            description: Nome do representante legal.
+          - name: qualificacao_representante_legal
+            description: Código da qualificação do representante legal.
+          - name: faixa_etaria
+            description: Código da faixa etária do sócio.
+
+      - name: simples
+        description: Informações do Simples Nacional.
+        meta:
+          external_location: "data/sample/simples.csv"
+        columns:
+          - name: cnpj_basico
+            description: Número base de inscrição no CNPJ.
+          - name: opcao_pelo_simples
+            description: Indicador de opção pelo Simples Nacional.
+          - name: data_opcao_simples
+            description: Data de opção pelo Simples Nacional.
+          - name: data_exclusao_simples
+            description: Data de exclusão do Simples Nacional.
+          - name: opcao_pelo_mei
+            description: Indicador de opção pelo MEI.
+          - name: data_opcao_mei
+            description: Data de opção pelo MEI.
+          - name: data_exclusao_mei
+            description: Data de exclusão do MEI.
+
+      - name: cnae
+        description: Domínio de atividades econômicas CNAE.
+        meta:
+          external_location: "data/sample/cnae.csv"
+        columns:
+          - name: codigo
+            description: Código da atividade econômica.
+          - name: descricao
+            description: Descrição da atividade econômica.
