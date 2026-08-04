@@ -1,5 +1,6 @@
 # dados brutos (NUNCA commitar - são GBs)
 data/raw/
+downloaded_files/
 *.csv
 *.zip
 *.duckdb
@@ -14,6 +15,7 @@ __pycache__/
 target/
 dbt_packages/
 logs/
+.user.yml
 
 # prefect
 .prefect/
