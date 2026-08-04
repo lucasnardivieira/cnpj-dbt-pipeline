@@ -1,56 +1,165 @@
 # Desafio FRANQ
 
-Este projeto implementa um pipeline de dados com dbt + DuckDB para processar arquivos de CNPJ e gerar modelos analiticos em camadas:
+Este projeto implementa um pipeline de dados com dbt + DuckDB para processar arquivos de CNPJ (Receita Federal) e gerar modelos analiticos em camadas:
 
-- staging: normalizacao e limpeza das fontes brutas
-- intermediate: joins e filtros de negocio
-- marts: tabelas de negocio prontas para consumo
+- **staging**: normalizacao e limpeza das fontes brutas
+- **intermediate**: joins e filtros de negocio
+- **marts**: tabelas de negocio prontas para consumo
 
-## Como executar
+Orquestracao via Prefect, testes de qualidade via dbt, versionamento de historico (SCD Type 2) via dbt snapshots.
 
-1. Ative o ambiente virtual:
-   ```powershell
-   .\.venv\Scripts\Activate.ps1
-   ```
-2. Gere as amostras locais:
-   ```powershell
-   python flows/extract.py
-   ```
-3. Execute o pipeline dbt:
-   ```powershell
-   .\.venv\Scripts\dbt.exe run --profiles-dir . --project-dir .
-   ```
-4. Execute os testes:
-   ```powershell
-   .\.venv\Scripts\dbt.exe test --profiles-dir . --project-dir .
-   ```
-5. Execute o snapshot:
-   ```powershell
-   .\.venv\Scripts\dbt.exe snapshot --profiles-dir . --project-dir .
-   ```
-6. Execute o fluxo Prefect (orquestra os passos 2 a 4):
-   ```powershell
-   python flows/pipeline.py
-   ```
+## Pre-requisitos
+
+- Python 3.11+ (testado com 3.12.1)
+- Git
+- ~15 GB de espaco livre em disco (para os arquivos brutos da Receita Federal)
+- Os comandos abaixo sao dados para **Windows (PowerShell)** e **Linux/macOS (bash)**
+
+## Passo a passo para rodar localmente
+
+### 1. Clonar o repositorio
+
+```bash
+git clone https://github.com/lucasnardivieira/desafio_franq.git
+cd desafio_franq
+```
+
+### 2. Baixar os dados brutos da Receita Federal
+
+O repositorio **nao inclui** os arquivos brutos (sao vários GB e estao no `.gitignore`). Baixe o conjunto de dados abertos do CNPJ ("Dados Abertos do CNPJ", Receita Federal), pegando os arquivos zipados por tipo (ex.: `Empresas0.zip`, `Estabelecimentos0.zip`, `Socios0.zip`, `Simples.zip`, `Cnaes.zip`), descompacte e coloque os arquivos dentro da pasta `downloaded_files/` na raiz do projeto, com os nomes originais (internos ao zip):
+
+| Arquivo esperado em `downloaded_files/` | Conteudo |
+|---|---|
+| `K3241.K03200Y0.D60711.EMPRECSV` | Empresas (parte 0) |
+| `K3241.K03200Y0.D60711.ESTABELE` | Estabelecimentos (parte 0) |
+| `K3241.K03200Y0.D60711.SOCIOCSV` | Socios (parte 0) |
+| `F.K03200$W.SIMPLES.CSV.D60711` | Simples Nacional (arquivo unico, cobre todos os CNPJs) |
+| `F.K03200$Z.D60711.CNAECSV` | Tabela de referencia de CNAE |
+
+> Só é necessário baixar a "parte 0" de cada arquivo particionado — o script de amostragem (passo 7) já garante que as amostras geradas se cruzam corretamente entre os arquivos.
+
+### 3. Criar e ativar o ambiente virtual Python
+
+**Windows (PowerShell):**
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+**Linux/macOS (bash):**
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+A partir daqui, com o ambiente virtual ativado, os comandos `python` e `dbt` funcionam de forma idêntica nos dois sistemas operacionais (por isso os próximos passos trazem um único bloco de comando).
+
+> Caso a ativação falhe no Windows, use o caminho completo do executável em cada comando, ex.: `.\.venv\Scripts\python.exe` e `.\.venv\Scripts\dbt.exe`.
+
+### 4. Instalar as dependencias Python
+
+```bash
+pip install -r requirements.txt
+```
+
+Instala `dbt-core`, `dbt-duckdb`, `duckdb`, `pandas` e `prefect` nas versões usadas no projeto.
+
+### 5. Instalar os pacotes dbt (dbt_utils)
+
+```bash
+dbt deps --profiles-dir . --project-dir .
+```
+
+Lê o `packages.yml` e baixa o pacote `dbt_utils` (usado no teste genérico `expression_is_true`) para `dbt_packages/`.
+
+### 6. Criar o `profiles.yml` (conexao do dbt com o DuckDB)
+
+Esse arquivo é local e não é versionado (contém configuração de ambiente). Crie `profiles.yml` na raiz do projeto com o conteúdo abaixo:
+
+```yaml
+franq_desafio:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: 'data/franq.duckdb'
+      threads: 4
+```
+
+Isso diz ao dbt para usar o adapter DuckDB e persistir o banco no arquivo `data/franq.duckdb`.
+
+### 7. Gerar as amostras de dados
+
+```bash
+python flows/extract.py
+```
+
+O que esse comando faz:
+1. Lê apenas a coluna `cnpj_basico` dos arquivos completos de `EMPRECSV` (empresas) e `ESTABELE` (estabelecimentos), em blocos de 500 mil linhas (sem carregar os arquivos inteiros na memória).
+2. Calcula a **interseção** dos `cnpj_basico` distintos entre os dois arquivos, garantindo que exista overlap real entre eles.
+3. Sorteia (com seed fixa, reprodutível) uma amostra de 10 mil `cnpj_basico` dentro dessa interseção.
+4. Filtra `estabelecimentos`, `empresas`, `socios` e `simples` por esse mesmo conjunto de CNPJs e grava os resultados em `data/sample/*.csv`.
+5. Copia a tabela de referência `cnae.csv` por inteiro (é pequena e não tem `cnpj_basico`).
+
+### 8. Rodar o pipeline dbt (staging → intermediate → marts)
+
+```bash
+dbt run --profiles-dir . --project-dir .
+```
+
+Materializa, na ordem correta de dependências: as views de staging (limpeza), as views intermediate (regras de negócio) e as tabelas de marts (`fct_empresas` incremental e `dim_cnae`).
+
+### 9. Rodar os testes de qualidade de dados
+
+```bash
+dbt test --profiles-dir . --project-dir .
+```
+
+Executa os 10 testes definidos em `models/schema.yml` (`not_null`, `unique`, `accepted_values`, `relationships`, `dbt_utils.expression_is_true`).
+
+### 10. Rodar o snapshot (histórico SCD Type 2)
+
+```bash
+dbt snapshot --profiles-dir . --project-dir .
+```
+
+Compara o estado atual de `stg_empresas` com a última versão registrada em `snapshot_capital_social` e cria uma nova linha de histórico sempre que `capital_social` mudar.
+
+### 11. (Opcional) Rodar tudo de uma vez via Prefect
+
+```bash
+python flows/pipeline.py
+```
+
+Orquestra em sequência os passos 7, 8 e 9 (extração → `dbt run` → `dbt test`), com 1 retry automático por etapa em caso de falha.
+
+### 12. Visualizar os dados gerados
+
+```bash
+python ver_dados.py
+```
+
+Lista as tabelas/views criadas no DuckDB, mostra a contagem de linhas de cada uma e imprime uma amostra de `fct_empresas` e `dim_cnae`.
 
 ## Estrutura
 
-- flows/extract.py: gera amostras CSV a partir dos arquivos baixados
-- flows/pipeline.py: orquestrador Prefect com extracao, dbt run e dbt test
-- models/staging: limpeza e normalizacao das fontes brutas
-- models/intermediate: regras de negocio (empresas ativas)
-- models/marts: fct_empresas (incremental) e dim_cnae
-- macros/: limpar_cnpj, padronizar_situacao_cadastral, gerar_coluna_auditoria
-- snapshots/: snapshot SCD2 de evolucao do capital social
-- models/schema.yml: testes de qualidade de dados
-- docs/finops_bigquery.md: proposta de produtizacao no BigQuery (partitioning/clustering/custos)
+- `flows/extract.py`: gera as amostras CSV a partir dos arquivos brutos (ver passo 7)
+- `flows/pipeline.py`: orquestrador Prefect (extração + dbt run + dbt test)
+- `models/staging/`: limpeza e normalização das fontes brutas
+- `models/intermediate/`: regras de negócio (empresas ativas, 1 linha por empresa)
+- `models/marts/`: `fct_empresas` (incremental) e `dim_cnae`
+- `macros/`: `limpar_cnpj`, `padronizar_situacao_cadastral`, `gerar_coluna_auditoria`
+- `snapshots/`: snapshot SCD2 de evolução do capital social
+- `models/schema.yml`: testes de qualidade de dados
+- `docs/finops_bigquery.md`: proposta de produtização no BigQuery (partitioning/clustering/custos)
+- `ver_dados.py`: utilitário para inspecionar rapidamente as tabelas do DuckDB
 
 ## Observacoes
 
-- O projeto usa DuckDB como banco local.
-- A conexao esta definida em profiles.yml (nao versionado).
-- fct_empresas e incremental, filtrando por data_situacao_cadastral (simula carga diaria).
-- O snapshot foi criado para monitorar mudancas em capital_social ao longo do tempo.
+- O projeto usa DuckDB como banco local (`data/franq.duckdb`, não versionado).
+- A conexão está definida em `profiles.yml` (não versionado, ver passo 6).
+- `fct_empresas` é incremental, filtrando por `data_situacao_cadastral` (simula carga diária).
+- O snapshot foi criado para monitorar mudanças em `capital_social` ao longo do tempo.
 
 ## Evidencia do snapshot (SCD Type 2)
 
@@ -83,4 +192,13 @@ Um terceiro ajuste, motivado pela correcao acima, foi necessario: com overlap re
 
 ## Status do desafio
 
-Ver [plano_execucao_desafio_franq.md](plano_execucao_desafio_franq.md) para o checklist completo etapa a etapa.
+- [x] Ambiente dbt + DuckDB configurado e funcional
+- [x] Amostragem reprodutível com overlap garantido de `cnpj_basico` entre arquivos
+- [x] Modelos em camadas: staging → intermediate → marts
+- [x] Macros Jinja reutilizáveis (`limpar_cnpj`, `padronizar_situacao_cadastral`, `gerar_coluna_auditoria`)
+- [x] `fct_empresas` incremental
+- [x] 10 testes de qualidade de dados (todos passando com `severity: error`)
+- [x] Snapshot SCD Type 2 (`snapshot_capital_social`)
+- [x] Orquestração via Prefect (`flows/pipeline.py`)
+- [x] Documentação FinOps para produtização em BigQuery ([docs/finops_bigquery.md](docs/finops_bigquery.md))
+
