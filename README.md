@@ -151,7 +151,6 @@ Lista as tabelas/views criadas no DuckDB, mostra a contagem de linhas de cada um
 - `macros/`: `limpar_cnpj`, `padronizar_situacao_cadastral`, `gerar_coluna_auditoria`
 - `snapshots/`: snapshot SCD2 de evolução do capital social
 - `models/schema.yml`: testes de qualidade de dados
-- `docs/finops_bigquery.md`: proposta de produtização no BigQuery (partitioning/clustering/custos) — mantido apenas local, enviado em anexo separadamente
 - `ver_dados.py`: utilitário para inspecionar rapidamente as tabelas do DuckDB
 
 ## Observacoes
@@ -189,16 +188,4 @@ Durante a revisao final, antes do push, foram encontrados e corrigidos dois bugs
 2. **Filtro de `situacao_cadastral` com valores incompativeis**: `int_empresas_ativas.sql` comparava `situacao_cadastral` com os codigos brutos (`'01'`, `'02'`, `'04'`), mas a coluna ja havia sido transformada em rotulos textuais (`'Ativa'`, `'Suspensa'`, `'Inativa'`) pela macro `padronizar_situacao_cadastral()` aplicada em `stg_estabelecimentos`. O filtro nunca dava match. Corrigido para comparar contra os rotulos textuais.
 
 Um terceiro ajuste, motivado pela correcao acima, foi necessario: com overlap real, uma mesma empresa (`cnpj_basico`) pode ter multiplas filiais em `estabelecimentos`, o que multiplicava linhas no join e quebrava o teste `unique` em `fct_empresas`. Adicionamos um `qualify row_number()` em `int_empresas_ativas.sql` para manter 1 linha por empresa, priorizando a matriz (`identificador_matriz_filial = '1'`).
-
-## Status do desafio
-
-- [x] Ambiente dbt + DuckDB configurado e funcional
-- [x] Amostragem reprodutível com overlap garantido de `cnpj_basico` entre arquivos
-- [x] Modelos em camadas: staging → intermediate → marts
-- [x] Macros Jinja reutilizáveis (`limpar_cnpj`, `padronizar_situacao_cadastral`, `gerar_coluna_auditoria`)
-- [x] `fct_empresas` incremental
-- [x] 10 testes de qualidade de dados (todos passando com `severity: error`)
-- [x] Snapshot SCD Type 2 (`snapshot_capital_social`)
-- [x] Orquestração via Prefect (`flows/pipeline.py`)
-- [x] Documentação FinOps para produtização em BigQuery (`docs/finops_bigquery.md`, mantida local e enviada em anexo)
 
