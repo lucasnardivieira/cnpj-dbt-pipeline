@@ -151,7 +151,7 @@ Lista as tabelas/views criadas no DuckDB, mostra a contagem de linhas de cada um
 - `macros/`: `limpar_cnpj`, `padronizar_situacao_cadastral`, `gerar_coluna_auditoria`
 - `snapshots/`: snapshot SCD2 de evolução do capital social
 - `models/schema.yml`: testes de qualidade de dados
-- `docs/finops_bigquery.md`: proposta de produtização no BigQuery (partitioning/clustering/custos)
+- `docs/finops_bigquery.md`: proposta de produtização no BigQuery (partitioning/clustering/custos) — mantido apenas local, enviado em anexo separadamente
 - `ver_dados.py`: utilitário para inspecionar rapidamente as tabelas do DuckDB
 
 ## Observacoes
@@ -200,5 +200,5 @@ Um terceiro ajuste, motivado pela correcao acima, foi necessario: com overlap re
 - [x] 10 testes de qualidade de dados (todos passando com `severity: error`)
 - [x] Snapshot SCD Type 2 (`snapshot_capital_social`)
 - [x] Orquestração via Prefect (`flows/pipeline.py`)
-- [x] Documentação FinOps para produtização em BigQuery ([docs/finops_bigquery.md](docs/finops_bigquery.md))
+- [x] Documentação FinOps para produtização em BigQuery (`docs/finops_bigquery.md`, mantida local e enviada em anexo)
 

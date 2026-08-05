@@ -26,3 +26,6 @@ profiles.yml
 
 # md
 plano_execucao_desafio_franq.md
+
+# documentacao FinOps - fica apenas local, enviada em anexo separadamente
+docs/
