@@ -6,10 +6,8 @@ from prefect import flow, task
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# Resolve o executavel dbt dentro do venv de forma multiplataforma
-# (Windows: .venv/Scripts/dbt.exe | Linux/macOS: .venv/bin/dbt).
-_VENV_BIN = ROOT / ".venv" / ("Scripts" if sys.platform == "win32" else "bin")
-DBT_BIN = str(_VENV_BIN / ("dbt.exe" if sys.platform == "win32" else "dbt"))
+# dbt is installed next to the running interpreter (.venv/bin or .venv\Scripts).
+DBT_BIN = str(Path(sys.executable).parent / ("dbt.exe" if sys.platform == "win32" else "dbt"))
 
 
 @task(retries=1, retry_delay_seconds=10)
@@ -35,12 +33,12 @@ def run_tests() -> None:
     )
 
 
-@flow(name="franq-dbt-pipeline")
-def franq_pipeline() -> None:
+@flow(name="cnpj-dbt-pipeline")
+def cnpj_pipeline() -> None:
     run_extract()
     run_dbt()
     run_tests()
 
 
 if __name__ == "__main__":
-    franq_pipeline()
+    cnpj_pipeline()

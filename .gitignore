@@ -2,6 +2,7 @@
 data/raw/
 downloaded_files/
 *.csv
+!tests/fixtures/*.csv
 *.zip
 *.duckdb
 *.duckdb.wal
@@ -22,7 +23,6 @@ logs/
 
 # env
 .env
-profiles.yml
 
 # md
 plano_execucao_desafio_franq.md

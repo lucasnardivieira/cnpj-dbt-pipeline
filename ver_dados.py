@@ -1,10 +1,12 @@
+import os
+
 import duckdb
 import pandas as pd
 
 pd.set_option("display.max_columns", None)
 pd.set_option("display.width", 200)
 
-con = duckdb.connect("data/franq.duckdb", read_only=True)
+con = duckdb.connect(os.environ.get("DUCKDB_PATH", "data/cnpj.duckdb"), read_only=True)
 
 print("Tabelas disponiveis:")
 print(con.sql("show tables").df())

@@ -1,9 +1,9 @@
-name: 'franq_desafio'
+name: 'cnpj_dbt_pipeline'
 version: '1.0.0'
-profile: 'franq_desafio'
+profile: 'cnpj_dbt_pipeline'
 
 models:
-  franq_desafio:
+  cnpj_dbt_pipeline:
     staging:
       +materialized: view
     intermediate:

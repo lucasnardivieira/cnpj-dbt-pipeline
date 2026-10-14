@@ -2,7 +2,6 @@
 
 {{
     config(
-      target_database='franq',
       target_schema='main',
       unique_key='cnpj_basico',
       strategy='check',
