@@ -1,8 +1,7 @@
-from pathlib import Path
 import random
+from pathlib import Path
 
 import pandas as pd
-
 
 SOURCE_DIR = Path(__file__).resolve().parent.parent / "downloaded_files"
 SAMPLE_DIR = Path(__file__).resolve().parent.parent / "data" / "sample"
@@ -102,18 +101,35 @@ def coletar_cnpjs_distintos(caminho: str, encoding: str = "latin-1", sep: str = 
     """Le apenas a 1a coluna (cnpj_basico) em chunks, sem carregar o arquivo inteiro."""
     cnpjs: set[str] = set()
     for chunk in pd.read_csv(
-        caminho, encoding=encoding, sep=sep, header=None,
-        usecols=[0], dtype=str, chunksize=CHUNK_SIZE, low_memory=False,
+        caminho,
+        encoding=encoding,
+        sep=sep,
+        header=None,
+        usecols=[0],
+        dtype=str,
+        chunksize=CHUNK_SIZE,
+        low_memory=False,
     ):
         cnpjs.update(chunk[0].dropna().unique())
     return cnpjs
 
 
-def filtrar_por_cnpj(caminho: str, colunas: list[str], cnpjs_alvo: set[str], encoding: str = "latin-1", sep: str = ";") -> pd.DataFrame:
+def filtrar_por_cnpj(
+    caminho: str,
+    colunas: list[str],
+    cnpjs_alvo: set[str],
+    encoding: str = "latin-1",
+    sep: str = ";",
+) -> pd.DataFrame:
     partes = []
     for chunk in pd.read_csv(
-        caminho, encoding=encoding, sep=sep, header=None,
-        dtype=str, chunksize=CHUNK_SIZE, low_memory=False,
+        caminho,
+        encoding=encoding,
+        sep=sep,
+        header=None,
+        dtype=str,
+        chunksize=CHUNK_SIZE,
+        low_memory=False,
     ):
         chunk.columns = colunas
         partes.append(chunk[chunk["cnpj_basico"].isin(cnpjs_alvo)])
@@ -161,9 +177,16 @@ if __name__ == "__main__":
     if not cnae_source_path.exists():
         raise FileNotFoundError(f"Arquivo não encontrado: {cnae_source_path}")
     df_cnae = pd.read_csv(
-        cnae_source_path, encoding="latin-1", sep=";", header=None,
-        dtype=str, low_memory=False,
+        cnae_source_path,
+        encoding="latin-1",
+        sep=";",
+        header=None,
+        dtype=str,
+        low_memory=False,
     )
     df_cnae.columns = cnae_colunas
     df_cnae.to_csv(cnae_target_path, index=False)
-    print(f"Gerada amostra: {cnae_target_path.name} ({len(df_cnae)} linhas, tabela de referencia completa)")
+    print(
+        f"Gerada amostra: {cnae_target_path.name} "
+        f"({len(df_cnae)} linhas, tabela de referencia completa)"
+    )

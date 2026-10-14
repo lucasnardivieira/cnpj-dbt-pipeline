@@ -1,6 +1,6 @@
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 from prefect import flow, task
 
@@ -19,12 +19,20 @@ def run_extract() -> None:
 
 @task(retries=1, retry_delay_seconds=10)
 def run_dbt() -> None:
-    subprocess.run([DBT_BIN, "run", "--profiles-dir", str(ROOT), "--project-dir", str(ROOT)], cwd=ROOT, check=True)
+    subprocess.run(
+        [DBT_BIN, "run", "--profiles-dir", str(ROOT), "--project-dir", str(ROOT)],
+        cwd=ROOT,
+        check=True,
+    )
 
 
 @task(retries=1, retry_delay_seconds=10)
 def run_tests() -> None:
-    subprocess.run([DBT_BIN, "test", "--profiles-dir", str(ROOT), "--project-dir", str(ROOT)], cwd=ROOT, check=True)
+    subprocess.run(
+        [DBT_BIN, "test", "--profiles-dir", str(ROOT), "--project-dir", str(ROOT)],
+        cwd=ROOT,
+        check=True,
+    )
 
 
 @flow(name="franq-dbt-pipeline")
