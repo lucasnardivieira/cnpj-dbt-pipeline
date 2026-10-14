@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run dbt deps
+      - run: uv run sqlfluff lint models snapshots tests
+
+  dbt-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Load synthetic fixtures as the sample sources
+        run: mkdir -p data/sample && cp tests/fixtures/*.csv data/sample/
+      - run: uv run dbt deps
+      # dbt build = run + test + snapshot, in DAG order
+      - run: uv run dbt build
+      - name: Second build exercises the incremental path of fct_empresas
+        run: uv run dbt build --select fct_empresas+
