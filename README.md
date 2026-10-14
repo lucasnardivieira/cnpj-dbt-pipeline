@@ -1,191 +1,144 @@
-# Desafio FRANQ
+# cnpj-dbt-pipeline
 
-Este projeto implementa um pipeline de dados com dbt + DuckDB para processar arquivos de CNPJ (Receita Federal) e gerar modelos analiticos em camadas:
+[![CI](https://github.com/lucasnardivieira/cnpj-dbt-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/lucasnardivieira/cnpj-dbt-pipeline/actions/workflows/ci.yml)
 
-- **staging**: normalizacao e limpeza das fontes brutas
-- **intermediate**: joins e filtros de negocio
-- **marts**: tabelas de negocio prontas para consumo
+A local analytics pipeline over Brazil's public **CNPJ company registry** (Receita Federal open data). It samples the multi-GB raw files into a consistent subset, models them in layers with **dbt + DuckDB**, enforces data-quality tests, keeps **SCD Type 2** history with dbt snapshots, and orchestrates the whole run with **Prefect**.
 
-Orquestracao via Prefect, testes de qualidade via dbt, versionamento de historico (SCD Type 2) via dbt snapshots.
+## Architecture
 
-## Pre-requisitos
+```mermaid
+flowchart LR
+    RF[("Receita Federal<br/>CNPJ open data<br/>(multi-GB, latin-1)")] --> EX["flows/extract.py<br/>consistent 10k-company sample"]
+    EX --> CSV[/"data/sample/*.csv"/]
 
-- Python 3.11+ (testado com 3.12.1)
-- Git
-- ~15 GB de espaco livre em disco (para os arquivos brutos da Receita Federal)
-- Os comandos abaixo sao dados para **Windows (PowerShell)** e **Linux/macOS (bash)**
+    subgraph DuckDB["DuckDB · dbt"]
+        direction LR
+        STG["staging<br/>stg_empresas · stg_estabelecimentos<br/>stg_socios · stg_simples · stg_cnae"]
+        INT["intermediate<br/>int_empresas_ativas"]
+        MART["marts<br/>fct_empresas (incremental)<br/>dim_cnae"]
+        SNAP["snapshot (SCD2)<br/>snapshot_capital_social"]
+        STG --> INT --> MART
+        STG --> SNAP
+    end
 
-## Passo a passo para rodar localmente
+    CSV --> STG
+    PF{{"Prefect flow<br/>flows/pipeline.py"}} -. orchestrates .-> EX
+    PF -. "dbt run / test" .-> DuckDB
+```
 
-### 1. Clonar o repositorio
+| Layer | Models | Materialization | What it does |
+|---|---|---|---|
+| staging | `stg_empresas`, `stg_estabelecimentos`, `stg_socios`, `stg_simples`, `stg_cnae` | view | Trims, nulls empty strings, normalizes CNPJ and registration status (macros), parses `capital_social` (`1000,00` → `1000.00`) |
+| intermediate | `int_empresas_ativas` | view | Joins companies × establishments, filters by status, keeps **one row per company** (head office first) |
+| marts | `fct_empresas` | incremental (`unique_key = cnpj_basico`) | Company fact table; incremental on `data_situacao_cadastral` to simulate daily loads |
+| marts | `dim_cnae` | table | CNAE 2.0 hierarchy (division / group / class / subclass) with company counts |
+| snapshots | `snapshot_capital_social` | snapshot (`check` on `capital_social`) | SCD Type 2 history of share capital |
+
+Reusable macros: `limpar_cnpj`, `padronizar_situacao_cadastral`, `gerar_coluna_auditoria`.
+
+## Quickstart (synthetic data, ~1 minute)
+
+You need [uv](https://docs.astral.sh/uv/). Python 3.11–3.12 is installed by uv if missing.
 
 ```bash
-git clone https://github.com/lucasnardivieira/desafio_franq.git
-cd desafio_franq
+git clone https://github.com/lucasnardivieira/cnpj-dbt-pipeline.git
+cd cnpj-dbt-pipeline
+uv sync
+
+# load the synthetic fixtures as the sample sources
+mkdir -p data/sample && cp tests/fixtures/*.csv data/sample/
+
+uv run dbt deps
+uv run dbt build        # run + test + snapshot, in DAG order
+uv run python ver_dados.py
 ```
 
-### 2. Baixar os dados brutos da Receita Federal
+`profiles.yml` is committed and points to `data/cnpj.duckdb`. Override it with `DUCKDB_PATH=/some/path.duckdb`.
 
-O repositorio **nao inclui** os arquivos brutos (sao vários GB e estao no `.gitignore`). Baixe o conjunto de dados abertos do CNPJ ("Dados Abertos do CNPJ", Receita Federal), pegando os arquivos zipados por tipo (ex.: `Empresas0.zip`, `Estabelecimentos0.zip`, `Socios0.zip`, `Simples.zip`, `Cnaes.zip`), descompacte e coloque os arquivos dentro da pasta `downloaded_files/` na raiz do projeto, com os nomes originais (internos ao zip):
+## Running on the real Receita Federal data
 
-| Arquivo esperado em `downloaded_files/` | Conteudo |
-|---|---|
-| `K3241.K03200Y0.D60711.EMPRECSV` | Empresas (parte 0) |
-| `K3241.K03200Y0.D60711.ESTABELE` | Estabelecimentos (parte 0) |
-| `K3241.K03200Y0.D60711.SOCIOCSV` | Socios (parte 0) |
-| `F.K03200$W.SIMPLES.CSV.D60711` | Simples Nacional (arquivo unico, cobre todos os CNPJs) |
-| `F.K03200$Z.D60711.CNAECSV` | Tabela de referencia de CNAE |
+1. Download the CNPJ open data ("Dados Abertos do CNPJ") from Receita Federal. Only **part 0** of each partitioned file is needed. Unzip into `downloaded_files/` keeping the original names (about 15 GB of free disk):
 
-> Só é necessário baixar a "parte 0" de cada arquivo particionado — o script de amostragem (passo 7) já garante que as amostras geradas se cruzam corretamente entre os arquivos.
+   | File in `downloaded_files/` | Content |
+   |---|---|
+   | `K3241.K03200Y0.D60711.EMPRECSV` | Companies (part 0) |
+   | `K3241.K03200Y0.D60711.ESTABELE` | Establishments (part 0) |
+   | `K3241.K03200Y0.D60711.SOCIOCSV` | Partners (part 0) |
+   | `F.K03200$W.SIMPLES.CSV.D60711` | Simples Nacional tax regime (single file) |
+   | `F.K03200$Z.D60711.CNAECSV` | CNAE reference table |
 
-### 3. Criar e ativar o ambiente virtual Python
+2. Build the sample and run the pipeline, either step by step:
 
-**Windows (PowerShell):**
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-```
+   ```bash
+   uv run python flows/extract.py   # writes data/sample/*.csv
+   uv run dbt deps
+   uv run dbt build
+   ```
 
-**Linux/macOS (bash):**
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
+   or through Prefect (extract → `dbt run` → `dbt test`, 1 retry per task):
 
-A partir daqui, com o ambiente virtual ativado, os comandos `python` e `dbt` funcionam de forma idêntica nos dois sistemas operacionais (por isso os próximos passos trazem um único bloco de comando).
+   ```bash
+   uv run python flows/pipeline.py
+   ```
 
-> Caso a ativação falhe no Windows, use o caminho completo do executável em cada comando, ex.: `.\.venv\Scripts\python.exe` e `.\.venv\Scripts\dbt.exe`.
+### How the sample stays consistent
+The raw files are not aligned by `cnpj_basico`, so taking the first N rows of each file produces samples that never join. `extract.py` does the following:
+1. Reads only the `cnpj_basico` column of companies and establishments, in 500k-row chunks.
+2. Intersects the two sets.
+3. Draws 10,000 keys from the intersection with a fixed seed.
+4. Filters every file by that same key set.
 
-### 4. Instalar as dependencias Python
+## Data quality
 
-```bash
-pip install -r requirements.txt
-```
+`dbt build` runs **11 tests**:
+- 10 generic tests in [`models/schema.yml`](models/schema.yml): `not_null`, `unique`, `accepted_values`, `relationships` (`stg_socios` → `stg_empresas`), and `dbt_utils.expression_is_true` (capital and company counts never negative).
+- 1 singular test, [`tests/assert_fct_empresas_not_empty.sql`](tests/assert_fct_empresas_not_empty.sql). An empty mart passes every column test, so this test fails the build when `fct_empresas` comes out empty.
 
-Instala `dbt-core`, `dbt-duckdb`, `duckdb`, `pandas` e `prefect` nas versões usadas no projeto.
+### SCD Type 2 evidence
 
-### 5. Instalar os pacotes dbt (dbt_utils)
-
-```bash
-dbt deps --profiles-dir . --project-dir .
-```
-
-Lê o `packages.yml` e baixa o pacote `dbt_utils` (usado no teste genérico `expression_is_true`) para `dbt_packages/`.
-
-### 6. Criar o `profiles.yml` (conexao do dbt com o DuckDB)
-
-Esse arquivo é local e não é versionado (contém configuração de ambiente). Crie `profiles.yml` na raiz do projeto com o conteúdo abaixo:
-
-```yaml
-franq_desafio:
-  target: dev
-  outputs:
-    dev:
-      type: duckdb
-      path: 'data/franq.duckdb'
-      threads: 4
-```
-
-Isso diz ao dbt para usar o adapter DuckDB e persistir o banco no arquivo `data/franq.duckdb`.
-
-### 7. Gerar as amostras de dados
-
-```bash
-python flows/extract.py
-```
-
-O que esse comando faz:
-1. Lê apenas a coluna `cnpj_basico` dos arquivos completos de `EMPRECSV` (empresas) e `ESTABELE` (estabelecimentos), em blocos de 500 mil linhas (sem carregar os arquivos inteiros na memória).
-2. Calcula a **interseção** dos `cnpj_basico` distintos entre os dois arquivos, garantindo que exista overlap real entre eles.
-3. Sorteia (com seed fixa, reprodutível) uma amostra de 10 mil `cnpj_basico` dentro dessa interseção.
-4. Filtra `estabelecimentos`, `empresas`, `socios` e `simples` por esse mesmo conjunto de CNPJs e grava os resultados em `data/sample/*.csv`.
-5. Copia a tabela de referência `cnae.csv` por inteiro (é pequena e não tem `cnpj_basico`).
-
-### 8. Rodar o pipeline dbt (staging → intermediate → marts)
-
-```bash
-dbt run --profiles-dir . --project-dir .
-```
-
-Materializa, na ordem correta de dependências: as views de staging (limpeza), as views intermediate (regras de negócio) e as tabelas de marts (`fct_empresas` incremental e `dim_cnae`).
-
-### 9. Rodar os testes de qualidade de dados
-
-```bash
-dbt test --profiles-dir . --project-dir .
-```
-
-Executa os 10 testes definidos em `models/schema.yml` (`not_null`, `unique`, `accepted_values`, `relationships`, `dbt_utils.expression_is_true`).
-
-### 10. Rodar o snapshot (histórico SCD Type 2)
-
-```bash
-dbt snapshot --profiles-dir . --project-dir .
-```
-
-Compara o estado atual de `stg_empresas` com a última versão registrada em `snapshot_capital_social` e cria uma nova linha de histórico sempre que `capital_social` mudar.
-
-### 11. (Opcional) Rodar tudo de uma vez via Prefect
-
-```bash
-python flows/pipeline.py
-```
-
-Orquestra em sequência os passos 7, 8 e 9 (extração → `dbt run` → `dbt test`), com 1 retry automático por etapa em caso de falha.
-
-### 12. Visualizar os dados gerados
-
-```bash
-python ver_dados.py
-```
-
-Lista as tabelas/views criadas no DuckDB, mostra a contagem de linhas de cada uma e imprime uma amostra de `fct_empresas` e `dim_cnae`.
-
-## Estrutura
-
-- `flows/extract.py`: gera as amostras CSV a partir dos arquivos brutos (ver passo 7)
-- `flows/pipeline.py`: orquestrador Prefect (extração + dbt run + dbt test)
-- `models/staging/`: limpeza e normalização das fontes brutas
-- `models/intermediate/`: regras de negócio (empresas ativas, 1 linha por empresa)
-- `models/marts/`: `fct_empresas` (incremental) e `dim_cnae`
-- `macros/`: `limpar_cnpj`, `padronizar_situacao_cadastral`, `gerar_coluna_auditoria`
-- `snapshots/`: snapshot SCD2 de evolução do capital social
-- `models/schema.yml`: testes de qualidade de dados
-- `ver_dados.py`: utilitário para inspecionar rapidamente as tabelas do DuckDB
-
-## Observacoes
-
-- O projeto usa DuckDB como banco local (`data/franq.duckdb`, não versionado).
-- A conexão está definida em `profiles.yml` (não versionado, ver passo 6).
-- `fct_empresas` é incremental, filtrando por `data_situacao_cadastral` (simula carga diária).
-- O snapshot foi criado para monitorar mudanças em `capital_social` ao longo do tempo.
-
-## Evidencia do snapshot (SCD Type 2)
-
-Como a amostra e estatica, simulamos uma mudanca real para provar a captura de historico:
-
-1. Estado inicial: `cnpj_basico = 41277443` com `capital_social = 0,00`.
-2. Rodamos `dbt snapshot` (1a vez) -- registro capturado com `dbt_valid_from` e `dbt_valid_to = null`.
-3. Alteramos manualmente `capital_social` para `99000,00` em `data/sample/empresas.csv` (simulando mudanca na fonte).
-4. Rodamos `dbt snapshot` novamente. Resultado em `snapshot_capital_social`:
+The sample is static, so a source change was simulated by editing `capital_social` for one company between two `dbt snapshot` runs:
 
 | cnpj_basico | capital_social | dbt_valid_from | dbt_valid_to |
 |---|---|---|---|
 | 41277443 | 0.0 | 2026-08-04 20:06:46 | 2026-08-04 20:07:25 |
 | 41277443 | 99000.0 | 2026-08-04 20:07:25 | null |
 
-A linha antiga foi fechada (`dbt_valid_to` preenchido) e uma nova linha foi aberta com o valor atualizado, confirmando que a estrategia `check` (comparando `capital_social`) captura corretamente o historico de mudancas.
+The old row is closed and a new current row is opened, which shows the `check` strategy captured the change.
 
-## Testes de qualidade
+## CI
 
-10 testes definidos em [models/schema.yml](models/schema.yml): `not_null`, `unique`, `accepted_values`, `relationships` e `dbt_utils.expression_is_true` (regra de negocio: capital social e quantidade de empresas nunca negativos). Todos os 10 testes rodam com severity `error` (padrao) e passam com dados reais, incluindo o `relationships` entre `stg_socios.cnpj_basico` e `stg_empresas.cnpj_basico`, garantido pela estrategia de amostragem descrita abaixo.
+GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on every push and PR:
+- **lint**: `ruff check`, `ruff format --check`, and `sqlfluff lint` (dbt templater, DuckDB dialect)
+- **dbt-build**: loads the synthetic fixtures from [`tests/fixtures/`](tests/fixtures/), then runs `dbt build` and a second build to exercise the incremental path
 
-## Bugs encontrados e corrigidos
+The fixtures are a handful of rows per source, built to hit the interesting cases:
+- a company with a head office and a branch
+- a closed company that gets filtered out
+- partners that must join to companies
+- a public entity with no share capital
 
-Durante a revisao final, antes do push, foram encontrados e corrigidos dois bugs que faziam as tabelas mart (`int_empresas_ativas`, `fct_empresas`, `dim_cnae`) ficarem **vazias**, mesmo com `dbt run`/`dbt test` executando sem erro de SQL (o que mostra que ausencia de erro nao garante corretude dos dados -- e preciso validar volume/conteudo real):
+## Lessons learned
 
-1. **Amostragem sem overlap entre arquivos**: `flows/extract.py` amostrava as primeiras N linhas de cada arquivo bruto de forma independente. Como os arquivos de Empresas/Estabelecimentos/Socios nao sao ordenados/alinhados por `cnpj_basico`, o `cnpj_basico` sorteado num arquivo praticamente nunca existia no outro, entao o `inner join` em `int_empresas_ativas` retornava 0 linhas. Corrigido reescrevendo `flows/extract.py` para: (a) ler apenas a coluna `cnpj_basico` dos arquivos completos de empresas e estabelecimentos em chunks (sem carregar tudo em memoria), (b) calcular a intersecao dos `cnpj_basico` distintos entre os dois arquivos, (c) sortear uma amostra determinística de 10 mil `cnpj_basico` dessa intersecao (seed fixa), e (d) filtrar todos os demais arquivos (estabelecimentos, empresas, socios, simples) por esse mesmo conjunto de CNPJs, garantindo overlap real entre as amostras.
-2. **Filtro de `situacao_cadastral` com valores incompativeis**: `int_empresas_ativas.sql` comparava `situacao_cadastral` com os codigos brutos (`'01'`, `'02'`, `'04'`), mas a coluna ja havia sido transformada em rotulos textuais (`'Ativa'`, `'Suspensa'`, `'Inativa'`) pela macro `padronizar_situacao_cadastral()` aplicada em `stg_estabelecimentos`. O filtro nunca dava match. Corrigido para comparar contra os rotulos textuais.
+The first version ran `dbt run` and `dbt test` without a single error, and every mart was **empty**. Two independent bugs caused it:
 
-Um terceiro ajuste, motivado pela correcao acima, foi necessario: com overlap real, uma mesma empresa (`cnpj_basico`) pode ter multiplas filiais em `estabelecimentos`, o que multiplicava linhas no join e quebrava o teste `unique` em `fct_empresas`. Adicionamos um `qualify row_number()` em `int_empresas_ativas.sql` para manter 1 linha por empresa, priorizando a matriz (`identificador_matriz_filial = '1'`).
+1. **Samples without overlap.** Each raw file was sampled independently. The files aren't sorted by `cnpj_basico`, so the `inner join` returned 0 rows. The fix was the intersection-based sampling described above.
+2. **Filter compared against the wrong domain.** `int_empresas_ativas` filtered `situacao_cadastral` with raw codes (`'01'`, `'02'`…). By that point a staging macro had already mapped those codes to labels (`'Ativa'`…), so the filter never matched.
 
+Fixing the overlap exposed a third issue: companies with several branches multiplied rows in the join and broke `unique` on `fct_empresas`. A `qualify row_number()` that prefers the head office fixed it.
+
+Takeaway: *no SQL error ≠ correct data*. Volume checks such as the non-empty test belong next to the column tests.
+
+## Project layout
+
+```
+flows/            extract.py (sampling) · pipeline.py (Prefect flow)
+models/           staging/ · intermediate/ · marts/ · _sources.yml · schema.yml
+macros/           reusable Jinja macros
+snapshots/        SCD2 snapshot of capital_social
+tests/            singular tests · fixtures/ (synthetic CI data)
+ver_dados.py      quick look at the DuckDB tables
+```
+
+## Cost
+
+Everything runs locally on DuckDB. There are no cloud resources, so nothing needs to be torn down: delete `data/` to reset.
