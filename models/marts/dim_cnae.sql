@@ -13,4 +13,4 @@ select
     count(*) as quantidade_empresas
 from {{ ref('int_empresas_ativas') }}
 where cnae_fiscal_principal is not null and trim(cnae_fiscal_principal) <> ''
-group by 1,2,3,4,5
+group by 1, 2, 3, 4, 5

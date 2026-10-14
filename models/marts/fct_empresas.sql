@@ -19,12 +19,13 @@ select
     status_empresa,
     possui_cnae_principal,
     data_situacao_cadastral,
-    case
-        when capital_social is null then 0
-        else capital_social
-    end as capital_social_limpo,
+    coalesce(capital_social, 0) as capital_social_limpo,
     {{ gerar_coluna_auditoria('fct_empresas') }}
 from {{ ref('int_empresas_ativas') }}
 {% if is_incremental() %}
-where data_situacao_cadastral > (select coalesce(max(data_situacao_cadastral), '00000000') from {{ this }})
+    -- noqa: disable=RF02
+    where data_situacao_cadastral > (
+        select coalesce(max(data_situacao_cadastral), '00000000') from {{ this }}
+    )
+    -- noqa: enable=RF02
 {% endif %}

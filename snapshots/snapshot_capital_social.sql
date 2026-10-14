@@ -9,9 +9,9 @@
     )
 }}
 
-select
-    cnpj_basico,
-    capital_social
-from {{ ref('stg_empresas') }}
+    select
+        cnpj_basico,
+        capital_social
+    from {{ ref('stg_empresas') }}
 
 {% endsnapshot %}

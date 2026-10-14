@@ -10,7 +10,7 @@ select
                 ',', '.'
             ),
             ''
-        ) as decimal(18,2)
+        ) as decimal(18, 2)
     ) as capital_social,
     cast(porte_empresa as string) as porte_empresa,
     nullif(trim(ente_federativo_responsavel), '') as ente_federativo_responsavel
