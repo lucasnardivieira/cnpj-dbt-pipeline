@@ -1,0 +1,6 @@
+cnpj_basico,identificador_socio,nome_socio,cnpj_cpf_socio,qualificacao_socio,data_entrada_sociedade,pais,representante_legal,nome_representante,qualificacao_representante_legal,faixa_etaria
+00412345,2,MARIA OLIVEIRA,***123456**,49,20150301,,***000000**,,00,5
+11223344,2,LUCAS EXEMPLO,***654321**,49,20190820,,***000000**,,00,3
+11223344,2,ANA EXEMPLO,***111222**,22,20190820,,***000000**,,00,3
+22334455,1,HOLDING CENTRAL SA,12345678000199,10,20050101,,***000000**,,00,0
+44556677,2,CARLOS SOUZA,***333444**,49,20221130,,***000000**,,00,6

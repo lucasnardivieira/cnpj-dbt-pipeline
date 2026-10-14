@@ -1,0 +1,4 @@
+cnpj_basico,opcao_pelo_simples,data_opcao_simples,data_exclusao_simples,opcao_pelo_mei,data_opcao_mei,data_exclusao_mei
+00412345,S,20180115,00000000,N,00000000,00000000
+33445566,S,20200505,00000000,S,20200505,00000000
+66778899,S,20100101,20161231,N,00000000,00000000
