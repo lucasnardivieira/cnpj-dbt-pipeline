@@ -12,6 +12,8 @@ dependencies = [
     "prefect==3.8.1",
     # dbt-core 1.7 imports distutils, removed from the stdlib in Python 3.12
     "setuptools",
+    # dbt-core 1.7 calls a protobuf API that was removed in protobuf 5
+    "protobuf>=4,<5",
 ]
 
 [dependency-groups]
